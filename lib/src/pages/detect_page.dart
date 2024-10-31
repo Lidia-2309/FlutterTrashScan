@@ -1,10 +1,12 @@
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:dotted_border/dotted_border.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter/services.dart';
 import 'package:image/image.dart' as img;
+import 'package:tflite_flutter/tflite_flutter.dart';
 
 class DetectPage extends StatefulWidget {
   const DetectPage({super.key});
@@ -17,12 +19,98 @@ class _DetectPageState extends State<DetectPage> {
   File? image;
   late List _results;
   bool imageSelect = false;
-  // Interpreter? interpreter;
+  Interpreter? interpreter;
+  bool isDetecting = false;
 
   @override
   void initState() {
     super.initState();
-    // loadModel();
+    loadModel();
+  }
+
+  Future<void> loadModel() async {
+    try {
+      interpreter =
+          await Interpreter.fromAsset('lib/src/assets/modelv10_float16.tflite');
+      print("Model loaded successfully");
+    } catch (e) {
+      print("Error loading model: $e");
+    }
+  }
+
+  Uint8List? imageToByteListFloat(img.Image image, int inputSize) {
+    var convertedBytes = Float32List(1 * inputSize * inputSize * 3);
+    var buffer = Float32List.view(convertedBytes.buffer);
+    int pixelIndex = 0;
+    for (int y = 0; y < inputSize; y++) {
+      for (int x = 0; x < inputSize; x++) {
+        final pixel = image.getPixel(x, y);
+        buffer[pixelIndex++] = (img.getRed(pixel) / 255.0);
+        buffer[pixelIndex++] = (img.getGreen(pixel) / 255.0);
+        buffer[pixelIndex++] = (img.getBlue(pixel) / 255.0);
+      }
+    }
+    return convertedBytes.buffer.asUint8List();
+  }
+
+  Future<void> runModelOnImage() async {
+    if (image == null || interpreter == null) return;
+
+    setState(() {
+      isDetecting = true;
+    });
+
+    // Carregar e redimensionar a imagem para 640x640
+    final rawImage = img.decodeImage(await image!.readAsBytes())!;
+    final resizedImage = img.copyResize(rawImage, width: 640, height: 640);
+
+    // Converter imagem redimensionada para um tensor de entrada
+    var input = imageToByteListFloat(resizedImage, 640);
+
+    // Ajustar o tensor de saída para a forma correta
+    var output = List.filled(1 * 300 * 6, 0.0).reshape([1, 300, 6]);
+
+    // Realizar inferência
+    interpreter!.run(input!, output);
+
+    // Exibir o resultado da inferência
+    final detections = processOutput(output, 0.1); // Define um threshold de confiança, ex. 0.5
+
+    print("DETECTIONSSSSS $detections");
+
+  print("Detections a serem passadas: $detections");
+
+context.go('/detect-results', extra: {
+  'image': image,
+  'detections': detections,
+});
+  }
+
+  List<Map<String, dynamic>> processOutput(
+      List<dynamic> output, double confidenceThreshold) {
+    List<Map<String, dynamic>> detections = [];
+
+    for (var detection in output[0]) {
+      double confidence = detection[4]; // Pega o valor de confiança
+      print("confidence: $confidence");
+      if (confidence > confidenceThreshold) {
+        detections.add({
+          'classe': detection[5],
+          'confiança': confidence,
+          'caixa': [detection[0], detection[1], detection[2], detection[3]],
+        });
+
+        double x1 = detection[0];
+        double y1 = detection[1];
+        double x2 = detection[2];
+        double y2 = detection[3];
+        double classe = detection[5];
+        print(
+            "Detecção: Classe: $classe, Confiança: $confidence, Caixa: ($x1, $y1, $x2, $y2)");
+      }
+    }
+
+    return detections;
   }
 
   // Future<void> loadModel() async {
@@ -48,7 +136,6 @@ class _DetectPageState extends State<DetectPage> {
 
   //   });
   // }
-
 
   Future pickImage() async {
     try {
@@ -216,57 +303,55 @@ class _DetectPageState extends State<DetectPage> {
                 ),
               ),
               const SizedBox(height: 20),
-              imageSelect ?
-                Expanded(
-                  child: ListView.builder(
-                    itemCount: _results.length,
-                    itemBuilder: (context, index) {
-                      return Card(
-                        child: Padding(
-                          padding: const EdgeInsets.all(8.0),
-                          child: Text(
-                            "${_results[index]['label']} - ${( _results[index]['confidence'] * 100).toStringAsFixed(2)}%",
-                            style: const TextStyle(
-                              color: Colors.red,
-                              fontSize: 16,
+              imageSelect
+                  ? Expanded(
+                      child: ListView.builder(
+                        itemCount: _results.length,
+                        itemBuilder: (context, index) {
+                          return Card(
+                            child: Padding(
+                              padding: const EdgeInsets.all(8.0),
+                              child: Text(
+                                "${_results[index]['label']} - ${(_results[index]['confidence'] * 100).toStringAsFixed(2)}%",
+                                style: const TextStyle(
+                                  color: Colors.red,
+                                  fontSize: 16,
+                                ),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    )
+                  : Row(
+                      children: [
+                        Expanded(
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 30),
+                            child: Divider(
+                              color: Colors.grey,
+                              thickness: 0.7,
                             ),
                           ),
                         ),
-                      );
-                    },
-                  ),
-                )
-              :
-              Row(
-                children: [
-                  Expanded(
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 30),
-                      child: Divider(
-                        color: Colors.grey,
-                        thickness: 0.7,
-                      ),
+                        const Text(
+                          'ou',
+                          style: TextStyle(
+                            color: Colors.grey,
+                            fontSize: 14,
+                          ),
+                        ),
+                        Expanded(
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 30),
+                            child: Divider(
+                              color: Colors.grey,
+                              thickness: 0.7,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
-                  ),
-                  const Text(
-                    'ou',
-                    style: TextStyle(
-                      color: Colors.grey,
-                      fontSize: 14,
-                    ),
-                  ),
-                  Expanded(
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 30),
-                      child: Divider(
-                        color: Colors.grey,
-                        thickness: 0.7,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              
               const SizedBox(height: 20),
               SizedBox(
                 width: width * 0.4,
@@ -288,24 +373,26 @@ class _DetectPageState extends State<DetectPage> {
                   ),
                 ),
               ),
-            
               const SizedBox(height: 10),
               Padding(
                 padding: EdgeInsets.only(top: height * 0.03),
                 child: SizedBox(
                   width: width * 0.6,
                   child: ElevatedButton.icon(
-                    onPressed: ()=>{
-                      
-                    },
-                    // onPressed: image != null ? () => imageDetection(image!) : null,
-                    //icon: const Icon(Icons.document_scanner, color: Colors.white),
-                    label: const Text(
-                      'Detectar',
-                      style: TextStyle(color: Colors.white),
-                    ),
+                    onPressed: image != null && !isDetecting
+                        ? () => runModelOnImage()
+                        : null,
+                    icon: isDetecting
+                        ? CircularProgressIndicator(
+                            color: Colors.white,
+                            strokeWidth: 2.0,
+                          )
+                        : null,
+                    label: Text(isDetecting ? 'Detectando...' : 'Detectar',
+                        style: TextStyle(color: Colors.white)),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF06502D),
+                      backgroundColor:
+                          isDetecting ? Colors.grey : const Color(0xFF06502D),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(15),
                       ),

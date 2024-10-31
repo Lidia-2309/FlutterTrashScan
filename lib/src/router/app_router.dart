@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../pages/home_page.dart';
@@ -18,7 +20,16 @@ class AppRouter {
       ),
       GoRoute(
         path: '/detect-results',
-        builder: (context, state) => const DetectResultsPage(),
+        builder: (context, state) {
+          // Recupera o argumento passado ao navegar para esta página
+          final args = state.extra as Map<String, dynamic>?;
+          final image = args?['image'] as File?;
+          final detections = args?['detections'] as List<Map<String, dynamic>>? ?? [];
+          return DetectResultsPage(
+            image: image,
+            detections: detections,
+          );
+        },
       ),
     ],
   );
