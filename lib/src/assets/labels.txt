@@ -1,0 +1,4 @@
+Metal
+Cardboard
+Glass
+Plastic
