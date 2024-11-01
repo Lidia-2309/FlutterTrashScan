@@ -12,7 +12,6 @@ class DetectResultsPage extends StatelessWidget {
     required this.detections,
   });
 
-  // Mapeamento de classes e cores permanece o mesmo.
   final Map<double, String> classNames = {
     0.0: 'Metal',
     1.0: 'Papel/Papelão',
@@ -21,10 +20,10 @@ class DetectResultsPage extends StatelessWidget {
   };
 
   final Map<double, Color> classColors = {
-    0.0: Colors.red,
-    1.0: Colors.green,
-    2.0: Colors.blue,
-    3.0: Colors.yellow,
+    0.0: Colors.yellow,
+    1.0: const Color.fromARGB(255, 37, 23, 167),
+    2.0: const Color.fromARGB(255, 52, 158, 56),
+    3.0: Colors.red,
   };
 
   @override
@@ -72,49 +71,7 @@ class DetectResultsPage extends StatelessWidget {
                 children: [
                   Stack(
                     children: [
-                      // Exibe a imagem original
                       Image.file(image!),
-                      // Sobrepõe as caixas de detecção
-                      Positioned.fill(
-                        child: Stack(
-                          children: detections.map((pred) {
-                            // Extrai as coordenadas de cada detecção
-                            final List<double> caixa = List<double>.from(pred['caixa']);
-                            final double left = caixa[0] * width;
-                            final double top = caixa[1] * height;
-                            final double right = caixa[2] * width;
-                            final double bottom = caixa[3] * height;
-
-                            final double classIndex = pred['classe'];
-                            final String className = classNames[classIndex] ?? 'Desconhecido';
-                            final Color boxColor = classColors[classIndex] ?? Colors.black;
-                            final double confidence = pred['confiança'];
-
-                            return Positioned(
-                              left: left,
-                              top: top,
-                              width: right - left,
-                              height: bottom - top,
-                              child: Container(
-                                decoration: BoxDecoration(
-                                  border: Border.all(
-                                    color: boxColor,
-                                    width: 2,
-                                  ),
-                                ),
-                                child: Text(
-                                  '$className - ${(confidence * 100).toStringAsFixed(2)}%',
-                                  style: TextStyle(
-                                    color: boxColor,
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ),
-                            );
-                          }).toList(),
-                        ),
-                      ),
                     ],
                   ),
                   // Exibe a lista de classes presentes e suas cores

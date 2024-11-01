@@ -61,6 +61,8 @@ flutter:
     - lib/src/assets/modelv8.tflite
     - lib/src/assets/modelv10_float16.tflite
     - lib/src/assets/modelv10_float32.tflite
+    - lib/src/assets/modelv11_float16.tflite
+    - lib/src/assets/modelv11_float32.tflite
     - lib/src/assets/labels.txt
 
   # The following line ensures that the Material Icons font is

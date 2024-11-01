@@ -30,8 +30,7 @@ class _DetectPageState extends State<DetectPage> {
 
   Future<void> loadModel() async {
     try {
-      interpreter =
-          await Interpreter.fromAsset('lib/src/assets/modelv10_float16.tflite');
+      interpreter = await Interpreter.fromAsset('lib/src/assets/modelv10_float16.tflite');
       print("Model loaded successfully");
     } catch (e) {
       print("Error loading model: $e");
@@ -67,8 +66,11 @@ class _DetectPageState extends State<DetectPage> {
     // Converter imagem redimensionada para um tensor de entrada
     var input = imageToByteListFloat(resizedImage, 640);
 
-    // Ajustar o tensor de saída para a forma correta
+    // Para V8 e v10 descomente a linha abaixo
     var output = List.filled(1 * 300 * 6, 0.0).reshape([1, 300, 6]);
+
+    // Para V11 descomente a linha abaixo
+    //var output = List.filled(1 * 8 * 8400, 0.0).reshape([1, 8, 8400]);
 
     // Realizar inferência
     interpreter!.run(input!, output);
@@ -86,56 +88,38 @@ context.go('/detect-results', extra: {
 });
   }
 
-  List<Map<String, dynamic>> processOutput(
-      List<dynamic> output, double confidenceThreshold) {
-    List<Map<String, dynamic>> detections = [];
+  List<Map<String, dynamic>> processOutput(List<dynamic> output, double confidenceThreshold) {
+  Map<double, Map<String, dynamic>> classDetections = {};
 
-    for (var detection in output[0]) {
-      double confidence = detection[4]; // Pega o valor de confiança
-      print("confidence: $confidence");
-      if (confidence > confidenceThreshold) {
-        detections.add({
-          'classe': detection[5],
+  for (var detection in output[0]) {
+    double confidence = detection[4];
+    double classe = detection[5];
+
+    if (confidence > confidenceThreshold) {
+      // Se a classe já está no mapa e a nova detecção tem maior confiança, substitua
+      if (classDetections.containsKey(classe)) {
+        if (confidence > classDetections[classe]!['confiança']) {
+          classDetections[classe] = {
+            'classe': classe,
+            'confiança': confidence,
+            'caixa': [detection[0], detection[1], detection[2], detection[3]],
+          };
+        }
+      } else {
+        // Se a classe ainda não foi adicionada, adiciona a detecção
+        classDetections[classe] = {
+          'classe': classe,
           'confiança': confidence,
           'caixa': [detection[0], detection[1], detection[2], detection[3]],
-        });
-
-        double x1 = detection[0];
-        double y1 = detection[1];
-        double x2 = detection[2];
-        double y2 = detection[3];
-        double classe = detection[5];
-        print(
-            "Detecção: Classe: $classe, Confiança: $confidence, Caixa: ($x1, $y1, $x2, $y2)");
+        };
       }
     }
-
-    return detections;
   }
 
-  // Future<void> loadModel() async {
-  //   Tflite.close();
-  //   String res;
-  //   res = (await Tflite.loadModel(model: 'lib/src/assets/best_float32.tflite', labels: 'lib/src/assets/labels.txt'))!;
-  //   print("Models loading status: $res");
-  // }
+  // Converte o mapa em uma lista de detecções
+  return classDetections.values.toList();
+}
 
-  // Future<void> imageDetection (File image)
-  // async {
-  //   var recognitions = await Tflite.runModelOnImage(
-  //     path: image.path,   // required
-  //     numResults: 6,    // defaults to 5
-  //     threshold: 0.5,   // defaults to 0.1
-  //     imageMean: 127.5,   // defaults to 117.0
-  //     imageStd: 127.5,  // defaults to 1.0
-  //   );
-  //   setState(() {
-  //     _results=recognitions!;
-  //     image = image;
-  //     imageSelect = true;
-
-  //   });
-  // }
 
   Future pickImage() async {
     try {
@@ -381,12 +365,6 @@ context.go('/detect-results', extra: {
                   child: ElevatedButton.icon(
                     onPressed: image != null && !isDetecting
                         ? () => runModelOnImage()
-                        : null,
-                    icon: isDetecting
-                        ? CircularProgressIndicator(
-                            color: Colors.white,
-                            strokeWidth: 2.0,
-                          )
                         : null,
                     label: Text(isDetecting ? 'Detectando...' : 'Detectar',
                         style: TextStyle(color: Colors.white)),
